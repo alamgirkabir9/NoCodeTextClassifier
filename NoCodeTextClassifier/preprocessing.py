@@ -11,10 +11,31 @@ import os
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from NoCodeTextClassifier import utils
 import numpy as np
+import ssl
 
+# Fix SSL certificate issues for NLTK downloads
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
 
-nltk.download('stopwords')
-nltk.download('wordnet')
+# Download NLTK data with error handling
+def download_nltk_data():
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords', quiet=True)
+    
+    try:
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('wordnet', quiet=True)
+        nltk.download('omw-1.4', quiet=True)  # Required for newer NLTK versions
+
+# Download required NLTK data
+download_nltk_data()
 
 class TextCleaner:
     '''Class for cleaning Text'''
@@ -22,20 +43,30 @@ class TextCleaner:
         self.currency_symbols = currency_symbols
         
         if stop_words is None:
-            self.stop_words = set(stopwords.words('english'))
+            try:
+                self.stop_words = set(stopwords.words('english'))
+            except LookupError:
+                nltk.download('stopwords', quiet=True)
+                self.stop_words = set(stopwords.words('english'))
         else:
             self.stop_words = stop_words
         
         if lemmatizer is None:
-            self.lemmatizer = WordNetLemmatizer()
+            try:
+                self.lemmatizer = WordNetLemmatizer()
+                # Test the lemmatizer to ensure it works
+                test_word = self.lemmatizer.lemmatize('testing')
+            except (AttributeError, LookupError) as e:
+                print(f"WordNet lemmatizer initialization failed: {e}")
+                nltk.download('wordnet', quiet=True)
+                nltk.download('omw-1.4', quiet=True)
+                self.lemmatizer = WordNetLemmatizer()
         else:
             self.lemmatizer = lemmatizer
 
     def remove_punctuation(self,text):
-
         return text.translate(str.maketrans('', '', string.punctuation))
     
-
     # Functions for cleaning text
     def clean_text(self, text):
         '''
@@ -43,29 +74,48 @@ class TextCleaner:
         whitespaces, numbers, stopwords.
         Lemmatize the words in root format.
         '''
-        text = text.lower()
-        text = re.sub(self.currency_symbols, 'currency', text)
-        '''remove any kind of emojis in the text'''
-        emoji_pattern = re.compile("["
-                            u"\U0001F600-\U0001F64F"  # emoticons
-                            u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-                            u"\U0001F680-\U0001F6FF"  # transport & map symbols
-                            u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-                            u"\U00002702-\U000027B0"
-                            u"\U000024C2-\U0001F251"
-                            "]+", flags=re.UNICODE)
-        text = emoji_pattern.sub(r'', text)
-        text = self.remove_punctuation(text)
-        text = re.compile('<.*?>').sub('', text)
-        text = text.replace('_', '')
-        text = re.sub(r'[^\w\s]', '', text)
-        text = re.sub(r'\d', ' ', text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        text = ' '.join(word for word in text.split() if word not in self.stop_words)
-        text = ' '.join(self.lemmatizer.lemmatize(word) for word in text.split())
-        #text = self.spell_correction(text)
+        # Handle non-string inputs
+        if not isinstance(text, str):
+            text = str(text) if text is not None else ""
         
-        return str(text)
+        if not text.strip():
+            return ""
+        
+        try:
+            text = text.lower()
+            text = re.sub(self.currency_symbols, 'currency', text)
+            
+            '''remove any kind of emojis in the text'''
+            emoji_pattern = re.compile("["
+                                u"\U0001F600-\U0001F64F"  # emoticons
+                                u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+                                u"\U0001F680-\U0001F6FF"  # transport & map symbols
+                                u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                                u"\U00002702-\U000027B0"
+                                u"\U000024C2-\U0001F251"
+                                "]+", flags=re.UNICODE)
+            text = emoji_pattern.sub(r'', text)
+            text = self.remove_punctuation(text)
+            text = re.compile('<.*?>').sub('', text)
+            text = text.replace('_', '')
+            text = re.sub(r'[^\w\s]', '', text)
+            text = re.sub(r'\d', ' ', text)
+            text = re.sub(r'\s+', ' ', text).strip()
+            text = ' '.join(word for word in text.split() if word not in self.stop_words)
+            
+            # Lemmatization with error handling
+            try:
+                text = ' '.join(self.lemmatizer.lemmatize(word) for word in text.split())
+            except (AttributeError, LookupError) as e:
+                print(f"Lemmatization failed for text: {e}")
+                # Continue without lemmatization
+                pass
+            
+            return str(text)
+        
+        except Exception as e:
+            print(f"Error cleaning text: {e}")
+            return str(text)
 
 
 class process:
@@ -114,8 +164,6 @@ class Vectorization:
         # Define the directory where you want to save the vectorizer
         self.vectorizer_dir = "vectorizers"
 
-
-
     def TfidfVectorizer(self, eval=False, string="text", **kwargs):
         # Step 1: Fit the Vectorizer on the Training Data
         vectorizer = TfidfVectorizer(**kwargs)
@@ -123,7 +171,6 @@ class Vectorization:
             tfidf_vectorizer = utils.load_artifacts("vectorizers","tfidf_vectorizer.pkl")
             return tfidf_vectorizer.transform([string])
             
-
         tfidf_vectorizer = vectorizer.fit_transform(self.df[self.text])
         print(tfidf_vectorizer.toarray().shape)
         os.makedirs(self.vectorizer_dir,exist_ok=True)
@@ -147,6 +194,3 @@ class Vectorization:
             pickle.dump(vectorizer, f)
         
         return count_vectorizer
-    
-    
-    
