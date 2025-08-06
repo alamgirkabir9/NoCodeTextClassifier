@@ -248,40 +248,40 @@ elif section == "Predictions":
             selected_model = st.selectbox("Choose the trained model:", available_models)
             
             # Prediction button
-            if st.button("Predict") and text_input.strip():
-                with st.spinner("Making prediction..."):
-                    predicted_label, prediction_proba = predict_text(
-                        selected_model, 
-                        text_input, 
-                        st.session_state.get('vectorizer_type', 'tfidf')
-                    )
-                    
-                    if predicted_label is not None:
-                        st.success("Prediction completed!")
+            if st.button("Predict", key="single_predict"):
+                if text_input.strip():
+                    with st.spinner("Making prediction..."):
+                        predicted_label, prediction_proba = predict_text(
+                            selected_model, 
+                            text_input, 
+                            st.session_state.get('vectorizer_type', 'tfidf')
+                        )
                         
-                        # Display results
-                        st.markdown("### Prediction Results")
-                        st.markdown(f"**Input Text:** {text_input}")
-                        st.markdown(f"**Predicted Class:** {predicted_label}")
-                        
-                        # Display probabilities if available
-                        if prediction_proba is not None:
-                            st.markdown("**Class Probabilities:**")
+                        if predicted_label is not None:
+                            st.success("Prediction completed!")
                             
-                            # Load encoder to get class names
-                            encoder = load_artifacts("artifacts", "encoder.pkl")
-                            if encoder is not None:
-                                classes = encoder.classes_
-                                prob_df = pd.DataFrame({
-                                    'Class': classes,
-                                    'Probability': prediction_proba
-                                }).sort_values('Probability', ascending=False)
+                            # Display results
+                            st.markdown("### Prediction Results")
+                            st.markdown(f"**Input Text:** {text_input}")
+                            st.markdown(f"**Predicted Class:** {predicted_label}")
+                            
+                            # Display probabilities if available
+                            if prediction_proba is not None:
+                                st.markdown("**Class Probabilities:**")
                                 
-                                st.bar_chart(prob_df.set_index('Class'))
-                                st.dataframe(prob_df)
-            
-            elif st.button("Predict") and not text_input.strip():
-                st.warning("Please enter some text to classify")
+                                # Load encoder to get class names
+                                encoder = load_artifacts("artifacts", "encoder.pkl")
+                                if encoder is not None:
+                                    classes = encoder.classes_
+                                    prob_df = pd.DataFrame({
+                                        'Class': classes,
+                                        'Probability': prediction_proba
+                                    }).sort_values('Probability', ascending=False)
+                                    
+                                    st.bar_chart(prob_df.set_index('Class'))
+                                    st.dataframe(prob_df)
+                else:
+                    st.warning("Please enter some text to classify")
         else:
             st.warning("No trained models found. Please train a model first.")
     else:
@@ -306,7 +306,7 @@ elif section == "Predictions":
                 available_models = [f for f in os.listdir("models") if f.endswith('.pkl')]
                 batch_model = st.selectbox("Choose model for batch prediction:", available_models, key="batch_model")
                 
-                if st.button("Run Batch Predictions"):
+                if st.button("Run Batch Predictions", key="batch_predict"):
                     with st.spinner("Processing batch predictions..."):
                         predictions = []
                         
