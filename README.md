@@ -45,9 +45,3 @@ text = input("Enter your text:\n")
 inference.prediction(text)
 ```
 
-
-Author:
-
-**Md Abdullah Al Hasib**
-
-### **Thank YOU**
